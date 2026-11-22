@@ -88,15 +88,19 @@ button { cursor: pointer; }
   padding-bottom: 12vh;
 }
 
-.picks { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+.picks { display: grid; gap: 10px; }
 
 .picks button {
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 16px 8px;
+  border-radius: 16px;
+  padding: 18px 18px;
+  font-size: 22px;
   font-weight: 700;
+  text-align: left;
 }
+
+.pass { display: grid; gap: 6px; color: var(--muted); font-size: 15px; }
 
 .picks button.on { background: var(--lime); color: #000; border-color: var(--lime); }
 
@@ -292,7 +296,7 @@ button { cursor: pointer; }
 .you { display: grid; gap: 14px; }
 
 .who { display: flex; align-items: baseline; gap: 12px; }
-.who h1 { margin: 0; font-family: var(--display); font-size: 40px; letter-spacing: -0.03em; text-transform: uppercase; }
+.who h2 { margin: 0; font-size: 22px; }
 .saved { font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--lime); }
 
 .you label { display: grid; gap: 6px; color: var(--muted); font-size: 15px; }
@@ -312,7 +316,7 @@ button { cursor: pointer; }
 
 .you textarea:focus { border-color: var(--lime); }
 
-.others { margin-top: 28px; border-top: 1px solid var(--line); }
+.others { margin-top: 0; }
 
 .person { padding: 18px 2px; border-bottom: 1px solid var(--line); }
 .person h2 { margin: 0 0 4px; font-size: 18px; }

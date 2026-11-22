@@ -108,15 +108,16 @@ const PEOPLE = [
 function renderEmail(message = '') {
   const saved = localStorage.getItem(EMAIL_KEY) || 'chloe@whyl.ai';
   app.innerHTML = `
-    <header class="top"><span class="mark">whyl.</span><span class="mark-sub">team</span></header>
+    <header class="top"><span class="mark">whyl.</span></header>
     <form class="gate" novalidate>
-      <h1>What everyone<br>is on.</h1>
-      <p>Pick your name, then the password.</p>
+      <h1>Who are you?</h1>
       <div class="picks">
         ${PEOPLE.map(([email, name]) => `<button type="button" data-email="${email}" class="${email === saved ? 'on' : ''}">${name}</button>`).join('')}
       </div>
-      <input class="field" name="password" type="password" autocomplete="current-password" placeholder="Password" required>
-      <button class="primary" type="submit">Open</button>
+      <label class="pass">Password
+        <input class="field" name="password" type="password" autocomplete="current-password" required>
+      </label>
+      <button class="primary" type="submit">Sign in</button>
       <p class="error" role="alert">${esc(message)}</p>
     </form>`;
   const form = app.querySelector('form');
@@ -132,7 +133,7 @@ function renderEmail(message = '') {
     const button = form.querySelector('button[type=submit]');
     const error = form.querySelector('.error');
     button.disabled = true;
-    button.textContent = 'Opening…';
+    button.textContent = 'Signing in…';
     error.textContent = '';
     try {
       const result = await api('enter', { email, password: form.password.value });
@@ -143,7 +144,7 @@ function renderEmail(message = '') {
     } catch (cause) {
       error.textContent = cause.message;
       button.disabled = false;
-      button.textContent = 'Open';
+      button.textContent = 'Sign in';
       form.password.focus();
     }
   });
@@ -152,12 +153,10 @@ function renderEmail(message = '') {
 /* Board */
 
 function personHtml(member) {
-  const doing = member.card.now
+  const line = member.card.now
     ? `<p>${esc(member.card.now)}</p>`
-    : '<p class="quiet">Nothing posted yet</p>';
-  const need = member.card.need ? `<p class="need">Needs ${esc(member.card.need)}</p>` : '';
-  const when = member.card.updatedAt ? `<p class="when">${esc(ago(member.card.updatedAt))}</p>` : '';
-  return `<article class="person"><h2>${esc(firstName(member))}</h2>${doing}${need}${when}</article>`;
+    : '<p class="quiet">Nothing yet</p>';
+  return `<article class="person"><h2>${esc(firstName(member))}</h2>${line}</article>`;
 }
 
 function othersHtml() {
@@ -177,13 +176,10 @@ function renderBoard() {
   app.innerHTML = `
     <header class="top"><span class="mark">whyl.</span></header>
     <form class="you" novalidate>
-      <div class="who"><h1>You</h1><span class="saved" hidden>Saved</span></div>
-      <label>What are you doing?
-        <textarea name="now" rows="2" maxlength="140" placeholder="One line">${esc(me.card.now)}</textarea>
-      </label>
-      <label>Need something?
-        <textarea name="need" rows="2" maxlength="140" placeholder="Leave this blank if you don't">${esc(me.card.need)}</textarea>
-      </label>
+      <article class="person mine">
+        <div class="who"><h2>${esc(firstName(me))}</h2><span class="saved" hidden>Saved</span></div>
+        <textarea name="now" rows="2" maxlength="140" placeholder="What are you doing?">${esc(me.card.now)}</textarea>
+      </article>
       <p class="error" role="alert"></p>
     </form>
     <section class="others">${othersHtml()}</section>
@@ -193,12 +189,11 @@ function renderBoard() {
   const saved = form.querySelector('.saved');
   const save = async () => {
     const now = form.now.value;
-    const need = form.need.value;
     const card = state.members.find((m) => m.email === state.me).card;
-    if (now.trim() === card.now && need.trim() === card.need) return;
+    if (now.trim() === card.now) return;
     form.querySelector('.error').textContent = '';
     try {
-      state = await api('card', { now, need });
+      state = await api('card', { now, need: '' });
       saved.hidden = false;
       const list = app.querySelector('.others');
       if (list) list.innerHTML = othersHtml();
