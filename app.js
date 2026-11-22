@@ -7,7 +7,6 @@ const REFRESH_MS = 20000;
 const app = document.getElementById('app');
 let token = localStorage.getItem(TOKEN_KEY);
 let state = null;
-let agreement = null;
 let installPrompt = null;
 let refreshTimer = null;
 
@@ -199,136 +198,9 @@ function renderCode(email) {
   });
 }
 
-/* Agreement */
-
-async function loadAgreement() {
-  if (!agreement) agreement = await api('agreement');
-  return agreement;
-}
-
-function inline(text) {
-  return esc(text).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-}
-
-function renderTable(rows) {
-  const cells = (row) => row.replace(/^\||\|$/g, '').split('|').map((cell) => cell.trim());
-  const [head, , ...body] = rows;
-  const signedInitials = Object.fromEntries(
-    state.members.filter((m) => m.signedAt).map((m) => [m.name, m.initials]),
-  );
-  const headCells = cells(head);
-  const initialCol = headCells.findIndex((cell) => cell.toLowerCase() === 'initial');
-  return body.map((row) => {
-    const values = cells(row);
-    const initials = signedInitials[values[0]];
-    const fields = values.slice(1).map((value, offset) => {
-      const i = offset + 1;
-      if (i === initialCol) {
-        return `<div><span>${inline(headCells[i])}</span><b class="${initials ? 'initialed' : 'blank'}">${initials ? esc(initials) : 'Not initialed yet'}</b></div>`;
-      }
-      return `<div><span>${inline(headCells[i])}</span><b>${inline(value)}</b></div>`;
-    }).join('');
-    return `<div class="row-card"><h3>${inline(values[0])}</h3>${fields}</div>`;
-  }).join('');
-}
-
-function renderMarkdown(text) {
-  const lines = text.replace(/\r/g, '').split('\n');
-  const html = [];
-  let paragraph = [];
-  let list = [];
-  let table = [];
-  const flush = () => {
-    if (paragraph.length) html.push(`<p>${inline(paragraph.join(' '))}</p>`);
-    if (list.length) html.push(`<ul>${list.map((item) => `<li>${inline(item)}</li>`).join('')}</ul>`);
-    if (table.length) html.push(renderTable(table));
-    paragraph = [];
-    list = [];
-    table = [];
-  };
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed) { flush(); continue; }
-    if (trimmed.startsWith('|')) { table.push(trimmed); continue; }
-    if (trimmed === '---') { flush(); html.push('<hr>'); continue; }
-    if (trimmed.startsWith('## ')) { flush(); html.push(`<h2>${inline(trimmed.slice(3))}</h2>`); continue; }
-    if (trimmed.startsWith('# ')) { flush(); html.push(`<h1>${inline(trimmed.slice(2))}</h1>`); continue; }
-    if (trimmed.startsWith('- ')) { if (paragraph.length) flush(); list.push(trimmed.slice(2)); continue; }
-    paragraph.push(trimmed);
-  }
-  flush();
-  return html.join('');
-}
-
-function signatureBlock(closingLine) {
-  const rows = state.members.map((m) => {
-    const when = m.signedAt
-      ? `Signed ${new Date(m.signedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
-      : 'Not signed yet';
-    return `<div class="sig ${m.signedAt ? 'done' : ''}"><span>${esc(m.name)}<br><small>${esc(m.email)}</small></span><span>${when}</span></div>`;
-  }).join('');
-  return `<h2>Signatures</h2><p>The Effective Date is the day the last founder signs.</p><div class="sig-list">${rows}</div><p>${inline(closingLine)}</p>`;
-}
-
-async function renderAgreement() {
-  app.innerHTML = '<div class="loading">Loading the agreement…</div>';
-  const doc = await loadAgreement();
-  const me = state.members.find((m) => m.email === state.me);
-  const [body, signatures = ''] = doc.text.split(/\n## Signatures\n/);
-  const closingLine = signatures.trim().split('\n').filter(Boolean).pop() || '';
-  app.innerHTML = `
-    <header class="top"><span class="mark">whyl.</span></header>
-    <p class="lead">Read the agreement, then sign at the bottom. The board opens after you sign.</p>
-    <article class="doc">
-      ${renderMarkdown(body)}
-      ${signatureBlock(closingLine)}
-      <form class="sign-form" novalidate>
-        <label>Your full name, as written above
-          <input class="field" name="typedName" autocomplete="name" placeholder="${esc(me.name)}" required>
-        </label>
-        <label>Your initials for Schedule A
-          <input class="field" name="initials" autocapitalize="characters" autocomplete="off" maxlength="4" placeholder="${esc(me.initials)}" required>
-        </label>
-        <label class="check"><input type="checkbox" name="agree"> I have read the Founders' Agreement and I sign it electronically. My typed name is my signature.</label>
-        <button class="primary" type="submit">Sign the agreement</button>
-        <p class="error" role="alert"></p>
-      </form>
-    </article>
-    <div class="foot"><button class="link" data-signout>Sign out</button></div>`;
-  app.querySelector('[data-signout]').addEventListener('click', signOut);
-  const form = app.querySelector('form');
-  form.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const error = form.querySelector('.error');
-    const button = form.querySelector('button[type=submit]');
-    if (!form.agree.checked) {
-      error.textContent = 'Check the box to agree.';
-      return;
-    }
-    button.disabled = true;
-    button.textContent = 'Signing…';
-    error.textContent = '';
-    try {
-      state = await api('sign', {
-        typedName: form.typedName.value,
-        initials: form.initials.value,
-        agree: true,
-        agreementSha256: doc.sha256,
-      });
-      window.scrollTo(0, 0);
-      render();
-    } catch (cause) {
-      error.textContent = cause.message;
-      button.disabled = false;
-      button.textContent = 'Sign the agreement';
-    }
-  });
-}
-
 /* Board */
 
 function personHtml(member) {
-  if (!member.card) return `<article class="person"><h2>${esc(firstName(member))}</h2><p class="quiet">Hasn't signed yet</p></article>`;
   const doing = member.card.now
     ? `<p>${esc(member.card.now)}</p>`
     : '<p class="quiet">Nothing posted yet</p>';
@@ -399,10 +271,6 @@ function renderBoard() {
 
 function render() {
   if (!state) return renderEmail();
-  if (!state.signed) {
-    stopRefresh();
-    return renderAgreement();
-  }
   renderBoard();
   startRefresh();
 }
@@ -421,7 +289,7 @@ async function refresh() {
   if (!token || document.hidden) return;
   try {
     state = await api('state');
-    if (state.signed) renderBoard();
+    renderBoard();
   } catch {
     // Keep showing the last board; the next refresh tries again.
   }
@@ -437,7 +305,7 @@ function stopRefresh() {
 }
 
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden && state?.signed) refresh();
+  if (!document.hidden && state) refresh();
 });
 
 window.addEventListener('beforeinstallprompt', (event) => {
