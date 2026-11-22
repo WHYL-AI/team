@@ -151,18 +151,33 @@ function renderEmail(message = '') {
 
 /* Board */
 
-function rowHtml(member) {
+function initials(name) {
+  return name.split(' ').filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
+}
+
+function cardHtml(member) {
   const mine = member.email === state.me;
   const name = firstName(member);
+  const mark = initials(member.name);
+  const when = member.card.updatedAt ? ago(member.card.updatedAt) : '';
+  const head = `<div class="card-top">
+      <span class="avatar">${esc(mark)}</span>
+      <div><h2>${esc(name)}</h2>${when ? `<span class="when">${esc(when)}</span>` : ''}</div>
+      ${mine ? '<span class="saved" hidden>Saved</span>' : ''}
+    </div>`;
   if (mine) {
-    return `<form class="row mine" novalidate>
-      <div class="row-name"><h2>${esc(name)}</h2><span class="saved" hidden>Saved</span></div>
-      <textarea name="now" rows="2" maxlength="140" placeholder="What are you on?">${esc(member.card.now)}</textarea>
+    return `<form class="card mine" novalidate>
+      ${head}
+      <label><span>On</span><textarea name="now" rows="2" maxlength="140" placeholder="What you're on right now">${esc(member.card.now)}</textarea></label>
+      <label><span>Next</span><textarea name="next" rows="2" maxlength="140" placeholder="What you'll do after">${esc(member.card.need)}</textarea></label>
       <p class="error" role="alert"></p>
     </form>`;
   }
-  const line = member.card.now ? esc(member.card.now) : '<span class="quiet">Nothing yet</span>';
-  return `<article class="row"><h2>${esc(name)}</h2><p>${line}</p></article>`;
+  if (!member.card.now && !member.card.need) {
+    return `<article class="card">${head}<p class="quiet">No update yet</p></article>`;
+  }
+  const next = member.card.need ? `<p class="next"><span>Next</span> ${esc(member.card.need)}</p>` : '';
+  return `<article class="card">${head}<p class="on">${esc(member.card.now || 'Nothing on right now')}</p>${next}</article>`;
 }
 
 let saveTimer = null;
@@ -170,20 +185,25 @@ let saveTimer = null;
 function renderBoard() {
   const typing = document.activeElement?.closest?.('.mine');
   if (typing) return;
+  const now = new Date();
+  const today = `${now.toLocaleDateString('en-US', { weekday: 'short' })} ${now.getDate()}`;
+  const ordered = [...state.members].sort((a, b) => (a.email === state.me ? -1 : b.email === state.me ? 1 : 0));
   app.innerHTML = `
-    <header class="top"><span class="mark">whyl.</span></header>
-    <section class="board">${state.members.map(rowHtml).join('')}</section>
+    <header class="top"><span class="mark">whyl.</span><span class="top-meta">${esc(today)}</span></header>
+    <p class="day">Where everyone is today.</p>
+    <section class="board">${ordered.map(cardHtml).join('')}</section>
     <div class="foot"><button class="link" type="button" data-signout>Sign out</button></div>`;
   app.querySelector('[data-signout]').addEventListener('click', signOut);
   const form = app.querySelector('.mine');
   const saved = form.querySelector('.saved');
   const save = async () => {
     const now = form.now.value;
+    const next = form.next.value;
     const card = state.members.find((m) => m.email === state.me).card;
-    if (now.trim() === card.now) return;
+    if (now.trim() === card.now && next.trim() === card.need) return;
     form.querySelector('.error').textContent = '';
     try {
-      state = await api('card', { now, need: card.need });
+      state = await api('card', { now, need: next });
       saved.hidden = false;
     } catch (cause) {
       saved.hidden = true;

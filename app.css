@@ -287,31 +287,63 @@ button { cursor: pointer; }
   color: var(--muted);
 }
 
+.day { margin: 0 0 16px; color: var(--muted); }
+
 /* Board */
 
-.board { display: grid; }
+.board { display: grid; gap: 12px; }
 
-.row { padding: 22px 0; border-bottom: 1px solid var(--line); }
-.row h2 { margin: 0 0 8px; font-size: 15px; font-weight: 500; color: var(--muted); }
-.row p { margin: 0; font-size: 26px; line-height: 1.25; overflow-wrap: anywhere; }
-.row .quiet { color: var(--muted); }
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  padding: 16px 16px 14px;
+}
 
-.row-name { display: flex; align-items: baseline; gap: 10px; }
-.mine h2 { color: var(--lime); }
-.saved { font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--lime); }
+.card.mine { border-color: var(--lime); }
+
+.card-top { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.card-top h2 { margin: 0; font-size: 17px; }
+.card-top .when { color: var(--muted); font-family: var(--mono); font-size: 12px; }
+.saved { margin-left: auto; font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--lime); }
+
+.avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--raised);
+  font-family: var(--mono);
+  font-size: 12px;
+  flex: none;
+}
+
+.mine .avatar { background: var(--lime); color: #000; }
+
+.card .on { margin: 0; font-size: 22px; line-height: 1.25; overflow-wrap: anywhere; }
+.card .quiet { margin: 0; color: var(--muted); font-size: 18px; }
+.card .next { margin: 10px 0 0; color: var(--text); font-size: 15px; }
+.card .next span { color: var(--lime); margin-right: 6px; font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; }
+
+.mine label { display: grid; gap: 4px; }
+.mine label + label { margin-top: 12px; }
+.mine label span { font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
 
 .mine textarea {
   width: 100%;
   resize: none;
-  background: transparent;
-  border: 0;
-  padding: 0;
-  font-size: 26px;
-  line-height: 1.25;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px 14px;
+  font-size: 18px;
+  line-height: 1.3;
   color: var(--text);
   outline: none;
 }
 
+.mine textarea:focus { border-color: var(--lime); }
 .mine textarea::placeholder { color: #5c5c57; }
 .mine .error { margin: 8px 0 0; }
 
