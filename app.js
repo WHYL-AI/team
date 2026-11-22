@@ -277,11 +277,8 @@ async function renderAgreement() {
   const [body, signatures = ''] = doc.text.split(/\n## Signatures\n/);
   const closingLine = signatures.trim().split('\n').filter(Boolean).pop() || '';
   app.innerHTML = `
-    <header class="top"><span class="mark">whyl.</span><span class="mark-sub">team</span><span class="top-meta">${state.members.filter((m) => m.signedAt).length}/${state.members.length} signed</span></header>
-    <section class="doc-intro">
-      <h1>Sign first, ${esc(firstName(me))}.</h1>
-      <p>The board opens once you sign the Founders' Agreement. Read it, then sign at the bottom.</p>
-    </section>
+    <header class="top"><span class="mark">whyl.</span></header>
+    <p class="lead">Read the agreement, then sign at the bottom. The board opens after you sign.</p>
     <article class="doc">
       ${renderMarkdown(body)}
       ${signatureBlock(closingLine)}
@@ -330,98 +327,71 @@ async function renderAgreement() {
 
 /* Board */
 
-function cardHtml(member, mine) {
-  const head = `<div class="card-head">
-      <span class="avatar">${esc(member.initials)}</span>
-      <span class="name">${esc(mine ? `${firstName(member)} (you)` : firstName(member))}</span>
-      ${member.card ? `<span class="dot ${isToday(member.card.updatedAt) ? 'fresh' : ''}"></span>` : ''}
-      <span class="ago">${member.card ? esc(ago(member.card.updatedAt)) : ''}</span>
-    </div>`;
-  if (!member.card) {
-    return `<article class="card stale">${head}<p class="waiting-note">Hasn't signed the agreement yet.</p></article>`;
-  }
-  const { now, need, updatedAt } = member.card;
-  const stale = !mine && !isToday(updatedAt);
-  const nowLine = now
-    ? `<p>${esc(now)}</p>`
-    : `<p class="empty">${mine ? 'Tap to say what you are on.' : 'Nothing yet.'}</p>`;
-  const needLine = need
-    ? `<div class="line need"><span class="tag">Needs</span><p>${esc(need)}</p></div>`
-    : mine ? '<div class="line"><span class="tag">Needs</span><p class="empty">Nothing right now.</p></div>' : '';
-  const inner = `${head}<div class="line"><span class="tag">Now</span>${nowLine}</div>${needLine}`;
-  if (mine) return `<button class="card mine" data-edit>${inner}<div class="edit-hint">Tap to update</div></button>`;
-  return `<article class="card ${stale ? 'stale' : ''}">${inner}</article>`;
+function personHtml(member) {
+  if (!member.card) return `<article class="person"><h2>${esc(firstName(member))}</h2><p class="quiet">Hasn't signed yet</p></article>`;
+  const doing = member.card.now
+    ? `<p>${esc(member.card.now)}</p>`
+    : '<p class="quiet">Nothing posted yet</p>';
+  const need = member.card.need ? `<p class="need">Needs ${esc(member.card.need)}</p>` : '';
+  const when = member.card.updatedAt ? `<p class="when">${esc(ago(member.card.updatedAt))}</p>` : '';
+  return `<article class="person"><h2>${esc(firstName(member))}</h2>${doing}${need}${when}</article>`;
 }
+
+function othersHtml() {
+  return state.members.filter((m) => m.email !== state.me).map(personHtml).join('');
+}
+
+let saveTimer = null;
 
 function renderBoard() {
-  if (document.querySelector('.backdrop')) return;
+  const typing = app.querySelector('.you textarea') && document.activeElement?.closest?.('.you');
+  if (typing) {
+    const list = app.querySelector('.others');
+    if (list) list.innerHTML = othersHtml();
+    return;
+  }
   const me = state.members.find((m) => m.email === state.me);
-  const others = state.members
-    .filter((m) => m.email !== state.me)
-    .sort((a, b) => {
-      const at = a.card?.updatedAt ? new Date(a.card.updatedAt).getTime() : -1;
-      const bt = b.card?.updatedAt ? new Date(b.card.updatedAt).getTime() : -1;
-      return bt - at;
-    });
-  const today = new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
   app.innerHTML = `
-    <header class="top"><span class="mark">whyl.</span><span class="mark-sub">team</span><span class="top-meta">${esc(today)}</span></header>
-    <main class="cards">
-      ${cardHtml(me, true)}
-      ${others.map((m) => cardHtml(m, false)).join('')}
-    </main>
-    <div class="foot"><button class="link" data-signout>Sign out</button></div>`;
-  app.querySelector('[data-edit]').addEventListener('click', () => openSheet(me));
-  app.querySelector('[data-signout]').addEventListener('click', signOut);
-}
-
-function openSheet(me) {
-  const backdrop = document.createElement('div');
-  backdrop.className = 'backdrop';
-  backdrop.innerHTML = `
-    <form class="sheet" novalidate>
-      <div class="grabber"></div>
-      <label><span class="tag">Now</span>
-        <textarea name="now" rows="2" maxlength="140" placeholder="What you are on">${esc(me.card.now)}</textarea>
-        <span class="count"></span>
+    <header class="top"><span class="mark">whyl.</span></header>
+    <form class="you" novalidate>
+      <div class="who"><h1>You</h1><span class="saved" hidden>Saved</span></div>
+      <label>What are you doing?
+        <textarea name="now" rows="2" maxlength="140" placeholder="One line">${esc(me.card.now)}</textarea>
       </label>
-      <label><span class="tag">Needs</span>
-        <textarea name="need" rows="2" maxlength="140" placeholder="One thing you need from the other two">${esc(me.card.need)}</textarea>
-        <span class="count"></span>
+      <label>Need something?
+        <textarea name="need" rows="2" maxlength="140" placeholder="Leave this blank if you don't">${esc(me.card.need)}</textarea>
       </label>
-      <button class="primary" type="submit">Save</button>
       <p class="error" role="alert"></p>
-    </form>`;
-  document.body.appendChild(backdrop);
-  const form = backdrop.querySelector('form');
-  const close = () => {
-    backdrop.remove();
-    renderBoard();
-  };
-  backdrop.addEventListener('click', (event) => {
-    if (event.target === backdrop) close();
-  });
-  form.querySelectorAll('textarea').forEach((area) => {
-    const counter = area.parentElement.querySelector('.count');
-    const update = () => { counter.textContent = `${area.value.length}/140`; };
-    area.addEventListener('input', update);
-    update();
-  });
-  form.now.focus();
-  form.now.setSelectionRange(form.now.value.length, form.now.value.length);
-  form.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const button = form.querySelector('button[type=submit]');
-    button.disabled = true;
-    button.textContent = 'Saving…';
+    </form>
+    <section class="others">${othersHtml()}</section>
+    <div class="foot"><button class="link" type="button" data-signout>Sign out</button></div>`;
+  app.querySelector('[data-signout]').addEventListener('click', signOut);
+  const form = app.querySelector('.you');
+  const saved = form.querySelector('.saved');
+  const save = async () => {
+    const now = form.now.value;
+    const need = form.need.value;
+    const card = state.members.find((m) => m.email === state.me).card;
+    if (now.trim() === card.now && need.trim() === card.need) return;
+    form.querySelector('.error').textContent = '';
     try {
-      state = await api('card', { now: form.now.value, need: form.need.value });
-      close();
+      state = await api('card', { now, need });
+      saved.hidden = false;
+      const list = app.querySelector('.others');
+      if (list) list.innerHTML = othersHtml();
     } catch (cause) {
+      saved.hidden = true;
       form.querySelector('.error').textContent = cause.message;
-      button.disabled = false;
-      button.textContent = 'Save';
     }
+  };
+  form.addEventListener('input', () => {
+    saved.hidden = true;
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(save, 700);
+  });
+  form.addEventListener('focusout', () => {
+    clearTimeout(saveTimer);
+    save();
   });
 }
 

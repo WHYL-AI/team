@@ -1,5 +1,5 @@
-const CACHE = 'whyl-team-v2';
-const SHELL = ['./', './app.js?v=2', './app.css?v=2', './icon.svg', './manifest.webmanifest'];
+const CACHE = 'whyl-team-v3';
+const SHELL = ['./', './app.js?v=3', './app.css?v=3', './icon.svg', './manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting()));
