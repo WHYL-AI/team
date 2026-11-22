@@ -1,5 +1,5 @@
-const CACHE = 'whyl-team-v6';
-const SHELL = ['./', './app.js?v=6', './app.css?v=6', './icon.svg', './manifest.webmanifest'];
+const CACHE = 'whyl-team-v7';
+const SHELL = ['./', './app.js?v=7', './app.css?v=7', './icon.svg', './manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -19,7 +19,7 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   if (event.request.method !== 'GET' || url.origin !== self.location.origin) return;
   event.respondWith(
-    fetch(event.request)
+    fetch(event.request, { cache: 'no-store' })
       .then((response) => {
         const copy = response.clone();
         caches.open(CACHE).then((cache) => cache.put(event.request, copy));
