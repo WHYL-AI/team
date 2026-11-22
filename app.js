@@ -7,7 +7,7 @@ const REFRESH_MS = 20000;
 const app = document.getElementById('app');
 let token = localStorage.getItem(TOKEN_KEY);
 let state = null;
-let tab = 'now';
+let tab = 'mine';
 let installPrompt = null;
 let refreshTimer = null;
 
@@ -150,80 +150,109 @@ function renderEmail(message = '') {
   });
 }
 
-/* Board */
+/* Lists */
 
-function personHtml(member) {
-  const doing = member.card.now
-    ? `<p>${esc(member.card.now)}</p>`
-    : '<p class="quiet">Nothing posted yet</p>';
-  const need = member.card.need ? `<p class="need">Needs ${esc(member.card.need)}</p>` : '';
-  const when = member.card.updatedAt ? `<p class="when">${esc(ago(member.card.updatedAt))}</p>` : '';
-  return `<article class="person"><h2>${esc(firstName(member))}</h2>${doing}${need}${when}</article>`;
+function mineItems() {
+  return (state.items || []).filter((item) => item.email === state.me);
 }
 
-function othersHtml() {
-  return state.members.filter((m) => m.email !== state.me).map(personHtml).join('');
+function reminderHtml(item, tappable) {
+  const button = tappable ? 'button' : 'div';
+  return `<${button} class="reminder ${item.doneAt ? 'done' : ''}" ${tappable ? `type="button" data-id="${esc(item.id)}"` : ''}>
+    <span class="tick" aria-hidden="true"></span>
+    <span class="text">${esc(item.text)}</span>
+  </${button}>`;
 }
 
-let saveTimer = null;
+function listHtml(items, tappable) {
+  const open = items.filter((item) => !item.doneAt);
+  const done = items.filter((item) => item.doneAt);
+  const openHtml = open.map((item) => reminderHtml(item, tappable)).join('')
+    || '<p class="quiet empty-note">Nothing yet.</p>';
+  const doneHtml = done.length
+    ? `<p class="done-label">Done</p>${done.map((item) => reminderHtml(item, tappable)).join('')}`
+    : '';
+  return openHtml + doneHtml;
+}
 
-function renderBoard() {
-  const typing = app.querySelector('.you textarea') && document.activeElement?.closest?.('.you');
-  if (typing) {
-    const list = app.querySelector('.others');
-    if (list) list.innerHTML = othersHtml();
+function renderMine() {
+  const typing = document.activeElement?.closest?.('.composer');
+  if (typing && app.querySelector('.list')) {
+    app.querySelector('.list').innerHTML = listHtml(mineItems(), true);
+    bindReminders();
     return;
   }
-  const me = state.members.find((m) => m.email === state.me);
+  const draft = app.querySelector('.composer input')?.value || '';
   app.innerHTML = `
     <header class="top"><span class="mark">whyl.</span></header>
-    <form class="you" novalidate>
-      <div class="who"><h1>You</h1><span class="saved" hidden>Saved</span></div>
-      <label>What are you doing?
-        <textarea name="now" rows="2" maxlength="140" placeholder="One line">${esc(me.card.now)}</textarea>
-      </label>
-      <label>Need something?
-        <textarea name="need" rows="2" maxlength="140" placeholder="Leave this blank if you don't">${esc(me.card.need)}</textarea>
-      </label>
+    <h1 class="page-title">You</h1>
+    <form class="composer" novalidate>
+      <input class="field" name="text" maxlength="140" placeholder="Add something you did or are doing" value="${esc(draft)}" required>
+      <button class="primary" type="submit">Send</button>
       <p class="error" role="alert"></p>
     </form>
-    <section class="others">${othersHtml()}</section>
+    <section class="list">${listHtml(mineItems(), true)}</section>
     <div class="foot"><button class="link" type="button" data-signout>Sign out</button></div>
     ${tabsHtml()}`;
   app.querySelector('[data-signout]').addEventListener('click', signOut);
   bindTabs();
-  const form = app.querySelector('.you');
-  const saved = form.querySelector('.saved');
-  const save = async () => {
-    const now = form.now.value;
-    const need = form.need.value;
-    const card = state.members.find((m) => m.email === state.me).card;
-    if (now.trim() === card.now && need.trim() === card.need) return;
-    form.querySelector('.error').textContent = '';
+  bindReminders();
+  const form = app.querySelector('.composer');
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const button = form.querySelector('button[type=submit]');
+    const error = form.querySelector('.error');
+    button.disabled = true;
+    error.textContent = '';
     try {
-      state = await api('card', { now, need });
-      saved.hidden = false;
-      const list = app.querySelector('.others');
-      if (list) list.innerHTML = othersHtml();
+      state = await api('item', { text: form.text.value });
+      form.text.value = '';
+      app.querySelector('.list').innerHTML = listHtml(mineItems(), true);
+      bindReminders();
     } catch (cause) {
-      saved.hidden = true;
-      form.querySelector('.error').textContent = cause.message;
+      error.textContent = cause.message;
     }
-  };
-  form.addEventListener('input', () => {
-    saved.hidden = true;
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(save, 700);
+    button.disabled = false;
+    form.text.focus();
   });
-  form.addEventListener('focusout', () => {
-    clearTimeout(saveTimer);
-    save();
+}
+
+function renderTeam() {
+  const people = state.members.filter((member) => member.email !== state.me);
+  const blocks = people.map((member) => {
+    const items = (state.items || []).filter((item) => item.email === member.email);
+    return `<section class="person-block"><h2>${esc(firstName(member))}</h2>${listHtml(items, false)}</section>`;
+  }).join('');
+  app.innerHTML = `
+    <header class="top"><span class="mark">whyl.</span></header>
+    <h1 class="page-title">Team</h1>
+    ${blocks}
+    <div class="foot"><button class="link" type="button" data-signout>Sign out</button></div>
+    ${tabsHtml()}`;
+  app.querySelector('[data-signout]').addEventListener('click', signOut);
+  bindTabs();
+}
+
+function bindReminders() {
+  app.querySelectorAll('.reminder[data-id]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const item = (state.items || []).find((row) => row.id === button.dataset.id);
+      button.disabled = true;
+      try {
+        state = await api('done', { id: button.dataset.id, done: !item?.doneAt });
+        if (tab === 'mine') renderMine();
+      } catch (cause) {
+        const error = app.querySelector('.error');
+        if (error) error.textContent = cause.message;
+        button.disabled = false;
+      }
+    });
   });
 }
 
 function tabsHtml() {
   const item = (id, label) => `<button type="button" data-tab="${id}" class="${tab === id ? 'on' : ''}">${label}</button>`;
-  return `<nav class="tabs">${item('now', 'Now')}${item('saved', 'Saved')}</nav>`;
+  return `<nav class="tabs">${item('mine', 'Mine')}${item('team', 'Team')}</nav>`;
 }
 
 function bindTabs() {
@@ -235,30 +264,12 @@ function bindTabs() {
   });
 }
 
-function renderSaved() {
-  const items = (state.log || []).map((item) => `
-    <article class="person">
-      <h2>${esc(firstName(item))}<span class="when">${esc(ago(item.at))}</span></h2>
-      ${item.now ? `<p>${esc(item.now)}</p>` : ''}
-      ${item.need ? `<p class="need">Needs ${esc(item.need)}</p>` : ''}
-    </article>`).join('');
-  app.innerHTML = `
-    <header class="top"><span class="mark">whyl.</span></header>
-    <h1 class="page-title">Saved</h1>
-    <p class="lead">Everything written on Now stays here.</p>
-    <section class="others">${items || '<p class="quiet empty-note">Nothing saved yet.</p>'}</section>
-    <div class="foot"><button class="link" type="button" data-signout>Sign out</button></div>
-    ${tabsHtml()}`;
-  app.querySelector('[data-signout]').addEventListener('click', signOut);
-  bindTabs();
-}
-
 /* Flow */
 
 function render() {
   if (!state) return renderEmail();
-  if (tab === 'saved') renderSaved();
-  else renderBoard();
+  if (tab === 'team') renderTeam();
+  else renderMine();
   startRefresh();
 }
 
@@ -276,8 +287,8 @@ async function refresh() {
   if (!token || document.hidden) return;
   try {
     state = await api('state');
-    if (tab === 'saved') renderSaved();
-    else renderBoard();
+    if (tab === 'team') renderTeam();
+    else renderMine();
   } catch {
     // Keep showing the last board; the next refresh tries again.
   }
