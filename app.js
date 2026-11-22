@@ -27,7 +27,7 @@ async function api(path, body) {
     body: body ? JSON.stringify(body) : undefined,
   });
   const data = await res.json().catch(() => ({}));
-  if (res.status === 401 && token && path !== 'verify') {
+  if (res.status === 401 && token && path !== 'enter') {
     signOut();
     throw new Error('Sign in again.');
   }
@@ -99,102 +99,53 @@ function bindInstall() {
   });
 }
 
+const PEOPLE = [
+  ['chloe@whyl.ai', 'Chloe'],
+  ['olalla@whyl.ai', 'Olalla'],
+  ['adhrit@whyl.ai', 'Adhrit'],
+];
+
 function renderEmail(message = '') {
-  const saved = localStorage.getItem(EMAIL_KEY) || '';
+  const saved = localStorage.getItem(EMAIL_KEY) || 'chloe@whyl.ai';
   app.innerHTML = `
     <header class="top"><span class="mark">whyl.</span><span class="mark-sub">team</span></header>
     <form class="gate" novalidate>
       <h1>What everyone<br>is on.</h1>
-      <p>For Chloe, Olalla, and Adhrit. Sign in with your whyl.ai email.</p>
-      ${installHint()}
-      <input class="field" name="email" type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false" placeholder="you@whyl.ai" value="${esc(saved)}" required>
-      <button class="primary" type="submit">Send me a code</button>
+      <p>Pick your name, then the password.</p>
+      <div class="picks">
+        ${PEOPLE.map(([email, name]) => `<button type="button" data-email="${email}" class="${email === saved ? 'on' : ''}">${name}</button>`).join('')}
+      </div>
+      <input class="field" name="password" type="password" autocomplete="current-password" placeholder="Password" required>
+      <button class="primary" type="submit">Open</button>
       <p class="error" role="alert">${esc(message)}</p>
     </form>`;
-  bindInstall();
   const form = app.querySelector('form');
+  let email = saved;
+  form.querySelectorAll('[data-email]').forEach((button) => {
+    button.addEventListener('click', () => {
+      email = button.dataset.email;
+      form.querySelectorAll('[data-email]').forEach((other) => other.classList.toggle('on', other === button));
+    });
+  });
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
-    const email = form.email.value.trim().toLowerCase();
     const button = form.querySelector('button[type=submit]');
     const error = form.querySelector('.error');
-    if (!email.includes('@')) {
-      error.textContent = 'Enter your whyl.ai email.';
-      return;
-    }
     button.disabled = true;
-    button.textContent = 'Sending…';
+    button.textContent = 'Opening…';
     error.textContent = '';
     try {
-      await api('code', { email });
-      localStorage.setItem(EMAIL_KEY, email);
-      renderCode(email);
-    } catch (cause) {
-      error.textContent = cause.message;
-      button.disabled = false;
-      button.textContent = 'Send me a code';
-    }
-  });
-}
-
-function renderCode(email) {
-  app.innerHTML = `
-    <header class="top"><span class="mark">whyl.</span><span class="mark-sub">team</span></header>
-    <form class="gate" novalidate>
-      <h1>Check your<br>email.</h1>
-      <p>We sent an 8-digit code to <strong>${esc(email)}</strong>.</p>
-      <input class="field field-code" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="8" placeholder="········" required>
-      <button class="primary" type="submit">Sign in</button>
-      <p class="error" role="alert"></p>
-      <button class="link" type="button" data-resend>Send a new code</button>
-      <button class="link" type="button" data-back>Use a different email</button>
-    </form>`;
-  const form = app.querySelector('form');
-  const input = form.code;
-  const button = form.querySelector('button[type=submit]');
-  const error = form.querySelector('.error');
-  input.focus();
-
-  const submit = async () => {
-    const code = input.value.replace(/\D/g, '');
-    if (code.length !== 8) {
-      error.textContent = 'Enter all 8 digits.';
-      return;
-    }
-    button.disabled = true;
-    button.textContent = 'Checking…';
-    error.textContent = '';
-    try {
-      const result = await api('verify', { email, code });
+      const result = await api('enter', { email, password: form.password.value });
       token = result.token;
       localStorage.setItem(TOKEN_KEY, token);
+      localStorage.setItem(EMAIL_KEY, email);
       await load();
     } catch (cause) {
       error.textContent = cause.message;
       button.disabled = false;
-      button.textContent = 'Sign in';
-      input.select();
+      button.textContent = 'Open';
+      form.password.focus();
     }
-  };
-
-  input.addEventListener('input', () => {
-    input.value = input.value.replace(/\D/g, '').slice(0, 8);
-    if (input.value.length === 8) submit();
-  });
-  form.addEventListener('submit', (event) => {
-    event.preventDefault();
-    submit();
-  });
-  form.querySelector('[data-back]').addEventListener('click', () => renderEmail());
-  form.querySelector('[data-resend]').addEventListener('click', async (event) => {
-    event.target.disabled = true;
-    try {
-      await api('code', { email });
-      error.textContent = 'New code sent.';
-    } catch (cause) {
-      error.textContent = cause.message;
-    }
-    event.target.disabled = false;
   });
 }
 

@@ -88,6 +88,18 @@ button { cursor: pointer; }
   padding-bottom: 12vh;
 }
 
+.picks { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+
+.picks button {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 16px 8px;
+  font-weight: 700;
+}
+
+.picks button.on { background: var(--lime); color: #000; border-color: var(--lime); }
+
 .gate h1 {
   font-family: var(--display);
   font-size: 44px;
