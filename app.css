@@ -114,8 +114,8 @@ button { cursor: pointer; }
 
 .field-code {
   font-family: var(--mono);
-  font-size: 30px;
-  letter-spacing: 0.45em;
+  font-size: 26px;
+  letter-spacing: 0.22em;
   text-align: center;
   padding-left: calc(18px + 0.45em);
 }

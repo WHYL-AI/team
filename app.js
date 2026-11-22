@@ -142,8 +142,8 @@ function renderCode(email) {
     <header class="top"><span class="mark">whyl.</span><span class="mark-sub">team</span></header>
     <form class="gate" novalidate>
       <h1>Check your<br>email.</h1>
-      <p>We sent a 6-digit code to <strong>${esc(email)}</strong>.</p>
-      <input class="field field-code" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="6" placeholder="······" required>
+      <p>We sent an 8-digit code to <strong>${esc(email)}</strong>.</p>
+      <input class="field field-code" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="8" placeholder="········" required>
       <button class="primary" type="submit">Sign in</button>
       <p class="error" role="alert"></p>
       <button class="link" type="button" data-resend>Send a new code</button>
@@ -157,8 +157,8 @@ function renderCode(email) {
 
   const submit = async () => {
     const code = input.value.replace(/\D/g, '');
-    if (code.length !== 6) {
-      error.textContent = 'Enter all 6 digits.';
+    if (code.length !== 8) {
+      error.textContent = 'Enter all 8 digits.';
       return;
     }
     button.disabled = true;
@@ -178,8 +178,8 @@ function renderCode(email) {
   };
 
   input.addEventListener('input', () => {
-    input.value = input.value.replace(/\D/g, '').slice(0, 6);
-    if (input.value.length === 6) submit();
+    input.value = input.value.replace(/\D/g, '').slice(0, 8);
+    if (input.value.length === 8) submit();
   });
   form.addEventListener('submit', (event) => {
     event.preventDefault();
