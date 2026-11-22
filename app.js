@@ -7,6 +7,7 @@ const REFRESH_MS = 20000;
 const app = document.getElementById('app');
 let token = localStorage.getItem(TOKEN_KEY);
 let state = null;
+let tab = 'now';
 let installPrompt = null;
 let refreshTimer = null;
 
@@ -151,60 +152,59 @@ function renderEmail(message = '') {
 
 /* Board */
 
-function initials(name) {
-  return name.split(' ').filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
+function personHtml(member) {
+  const doing = member.card.now
+    ? `<p>${esc(member.card.now)}</p>`
+    : '<p class="quiet">Nothing posted yet</p>';
+  const need = member.card.need ? `<p class="need">Needs ${esc(member.card.need)}</p>` : '';
+  const when = member.card.updatedAt ? `<p class="when">${esc(ago(member.card.updatedAt))}</p>` : '';
+  return `<article class="person"><h2>${esc(firstName(member))}</h2>${doing}${need}${when}</article>`;
 }
 
-function cardHtml(member) {
-  const mine = member.email === state.me;
-  const name = firstName(member);
-  const mark = initials(member.name);
-  const when = member.card.updatedAt ? ago(member.card.updatedAt) : '';
-  const head = `<div class="card-top">
-      <span class="avatar">${esc(mark)}</span>
-      <div><h2>${esc(name)}</h2>${when ? `<span class="when">${esc(when)}</span>` : ''}</div>
-      ${mine ? '<span class="saved" hidden>Saved</span>' : ''}
-    </div>`;
-  if (mine) {
-    return `<form class="card mine" novalidate>
-      ${head}
-      <label><span>On</span><textarea name="now" rows="2" maxlength="140" placeholder="What you're on right now">${esc(member.card.now)}</textarea></label>
-      <label><span>Next</span><textarea name="next" rows="2" maxlength="140" placeholder="What you'll do after">${esc(member.card.need)}</textarea></label>
-      <p class="error" role="alert"></p>
-    </form>`;
-  }
-  if (!member.card.now && !member.card.need) {
-    return `<article class="card">${head}<p class="quiet">No update yet</p></article>`;
-  }
-  const next = member.card.need ? `<p class="next"><span>Next</span> ${esc(member.card.need)}</p>` : '';
-  return `<article class="card">${head}<p class="on">${esc(member.card.now || 'Nothing on right now')}</p>${next}</article>`;
+function othersHtml() {
+  return state.members.filter((m) => m.email !== state.me).map(personHtml).join('');
 }
 
 let saveTimer = null;
 
 function renderBoard() {
-  const typing = document.activeElement?.closest?.('.mine');
-  if (typing) return;
-  const now = new Date();
-  const today = `${now.toLocaleDateString('en-US', { weekday: 'short' })} ${now.getDate()}`;
-  const ordered = [...state.members].sort((a, b) => (a.email === state.me ? -1 : b.email === state.me ? 1 : 0));
+  const typing = app.querySelector('.you textarea') && document.activeElement?.closest?.('.you');
+  if (typing) {
+    const list = app.querySelector('.others');
+    if (list) list.innerHTML = othersHtml();
+    return;
+  }
+  const me = state.members.find((m) => m.email === state.me);
   app.innerHTML = `
-    <header class="top"><span class="mark">whyl.</span><span class="top-meta">${esc(today)}</span></header>
-    <p class="day">Where everyone is today.</p>
-    <section class="board">${ordered.map(cardHtml).join('')}</section>
-    <div class="foot"><button class="link" type="button" data-signout>Sign out</button></div>`;
+    <header class="top"><span class="mark">whyl.</span></header>
+    <form class="you" novalidate>
+      <div class="who"><h1>You</h1><span class="saved" hidden>Saved</span></div>
+      <label>What are you doing?
+        <textarea name="now" rows="2" maxlength="140" placeholder="One line">${esc(me.card.now)}</textarea>
+      </label>
+      <label>Need something?
+        <textarea name="need" rows="2" maxlength="140" placeholder="Leave this blank if you don't">${esc(me.card.need)}</textarea>
+      </label>
+      <p class="error" role="alert"></p>
+    </form>
+    <section class="others">${othersHtml()}</section>
+    <div class="foot"><button class="link" type="button" data-signout>Sign out</button></div>
+    ${tabsHtml()}`;
   app.querySelector('[data-signout]').addEventListener('click', signOut);
-  const form = app.querySelector('.mine');
+  bindTabs();
+  const form = app.querySelector('.you');
   const saved = form.querySelector('.saved');
   const save = async () => {
     const now = form.now.value;
-    const next = form.next.value;
+    const need = form.need.value;
     const card = state.members.find((m) => m.email === state.me).card;
-    if (now.trim() === card.now && next.trim() === card.need) return;
+    if (now.trim() === card.now && need.trim() === card.need) return;
     form.querySelector('.error').textContent = '';
     try {
-      state = await api('card', { now, need: next });
+      state = await api('card', { now, need });
       saved.hidden = false;
+      const list = app.querySelector('.others');
+      if (list) list.innerHTML = othersHtml();
     } catch (cause) {
       saved.hidden = true;
       form.querySelector('.error').textContent = cause.message;
@@ -221,11 +221,44 @@ function renderBoard() {
   });
 }
 
+function tabsHtml() {
+  const item = (id, label) => `<button type="button" data-tab="${id}" class="${tab === id ? 'on' : ''}">${label}</button>`;
+  return `<nav class="tabs">${item('now', 'Now')}${item('saved', 'Saved')}</nav>`;
+}
+
+function bindTabs() {
+  app.querySelectorAll('[data-tab]').forEach((button) => {
+    button.addEventListener('click', () => {
+      tab = button.dataset.tab;
+      render();
+    });
+  });
+}
+
+function renderSaved() {
+  const items = (state.log || []).map((item) => `
+    <article class="person">
+      <h2>${esc(firstName(item))}<span class="when">${esc(ago(item.at))}</span></h2>
+      ${item.now ? `<p>${esc(item.now)}</p>` : ''}
+      ${item.need ? `<p class="need">Needs ${esc(item.need)}</p>` : ''}
+    </article>`).join('');
+  app.innerHTML = `
+    <header class="top"><span class="mark">whyl.</span></header>
+    <h1 class="page-title">Saved</h1>
+    <p class="lead">Everything written on Now stays here.</p>
+    <section class="others">${items || '<p class="quiet empty-note">Nothing saved yet.</p>'}</section>
+    <div class="foot"><button class="link" type="button" data-signout>Sign out</button></div>
+    ${tabsHtml()}`;
+  app.querySelector('[data-signout]').addEventListener('click', signOut);
+  bindTabs();
+}
+
 /* Flow */
 
 function render() {
   if (!state) return renderEmail();
-  renderBoard();
+  if (tab === 'saved') renderSaved();
+  else renderBoard();
   startRefresh();
 }
 
@@ -243,7 +276,8 @@ async function refresh() {
   if (!token || document.hidden) return;
   try {
     state = await api('state');
-    renderBoard();
+    if (tab === 'saved') renderSaved();
+    else renderBoard();
   } catch {
     // Keep showing the last board; the next refresh tries again.
   }
