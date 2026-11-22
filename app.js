@@ -187,7 +187,7 @@ function renderMine() {
     <header class="top"><span class="mark">whyl.</span></header>
     <h1 class="page-title">You</h1>
     <form class="composer" novalidate>
-      <input class="field" name="text" maxlength="140" placeholder="Add something you did or are doing" value="${esc(draft)}" required>
+      <input class="field" name="text" maxlength="140" placeholder="Add a reminder" value="${esc(draft)}" required>
       <button class="primary" type="submit">Send</button>
       <p class="error" role="alert"></p>
     </form>
